@@ -20,9 +20,9 @@ limitations under the License.
 #include <gtest/gtest.h>
 #include "tensorflow/contrib/lite/allocation.h"
 #include "tensorflow/contrib/lite/error_reporter.h"
+#include "tensorflow/contrib/lite/op_resolver.h"
 #include "tensorflow/contrib/lite/schema/schema_generated.h"
 #include "tensorflow/contrib/lite/testing/util.h"
-#include "tensorflow/contrib/lite/tools/mutable_op_resolver.h"
 #include "tensorflow/contrib/lite/tools/verifier.h"
 #include "tensorflow/contrib/lite/version.h"
 #include "tensorflow/core/framework/numeric_types.h"
@@ -31,7 +31,6 @@ namespace tflite {
 
 using flatbuffers::FlatBufferBuilder;
 using flatbuffers::Offset;
-using flatbuffers::Vector;
 
 // Build single subgraph model.
 class TfLiteFlatbufferModelBuilder {
@@ -113,8 +112,8 @@ TEST(VerifyModel, TestEmptyModel) {
                            /*description=*/0, /*buffers=*/0);
   ::tflite::FinishModelBuffer(builder, model);
 
-  ASSERT_TRUE(Verify(builder.GetBufferPointer(), builder.GetSize(),
-                     MutableOpResolver{}, DefaultErrorReporter()));
+  ASSERT_FALSE(Verify(builder.GetBufferPointer(), builder.GetSize(),
+                      MutableOpResolver{}, DefaultErrorReporter()));
 }
 
 TEST(VerifyModel, TestSimpleModel) {

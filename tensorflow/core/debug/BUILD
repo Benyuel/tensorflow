@@ -90,7 +90,6 @@ tf_cuda_library(
     deps = [
         ":debug",
         "//tensorflow/core:core_cpu_internal",
-        "//tensorflow/core:device_tracer",
         "//tensorflow/core:direct_session_internal",
         "//tensorflow/core:framework",
         "//tensorflow/core:lib",
@@ -298,6 +297,9 @@ tf_cc_test(
     size = "small",
     srcs = ["debug_grpc_io_utils_test.cc"],
     linkstatic = tf_kernel_tests_linkstatic(),
+    tags = [
+        "no_oss",  # b/73962011
+    ],
     deps = [
         ":debug_graph_utils",
         ":debug_grpc_testlib",
@@ -336,18 +338,3 @@ cc_library(
 #     ],
 #     visibility = ["//visibility:public"],
 # )
-
-# -----------------------------------------------------------------------------
-# Google-internal targets.  These must be at the end for syncrepo.
-
-filegroup(
-    name = "all_files",
-    srcs = glob(
-        ["**/*"],
-        exclude = [
-            "**/METADATA",
-            "**/OWNERS",
-        ],
-    ),
-    visibility = ["//tensorflow:__subpackages__"],
-)

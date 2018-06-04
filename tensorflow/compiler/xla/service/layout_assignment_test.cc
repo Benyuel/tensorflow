@@ -29,13 +29,13 @@ limitations under the License.
 #include "tensorflow/compiler/xla/service/hlo_matchers.h"
 #include "tensorflow/compiler/xla/service/hlo_module.h"
 #include "tensorflow/compiler/xla/service/hlo_opcode.h"
+#include "tensorflow/compiler/xla/service/hlo_parser.h"
 #include "tensorflow/compiler/xla/shape_layout.h"
 #include "tensorflow/compiler/xla/shape_util.h"
 #include "tensorflow/compiler/xla/test.h"
 #include "tensorflow/compiler/xla/test_helpers.h"
 #include "tensorflow/compiler/xla/tests/hlo_test_base.h"
 #include "tensorflow/compiler/xla/tests/test_utils.h"
-#include "tensorflow/compiler/xla/tools/parser/hlo_parser.h"
 #include "tensorflow/compiler/xla/util.h"
 #include "tensorflow/compiler/xla/xla_data.pb.h"
 #include "tensorflow/core/lib/core/status.h"
@@ -651,7 +651,7 @@ TEST_F(LayoutAssignmentTest, TransposeWithinFusionDoesNotCrash) {
     }
   )";
 
-  auto module = tools::Parse(module_str).ValueOrDie();
+  auto module = ParseHloString(module_str).ValueOrDie();
 
   module =
       backend()
@@ -660,13 +660,12 @@ TEST_F(LayoutAssignmentTest, TransposeWithinFusionDoesNotCrash) {
                          /*device_allocator=*/nullptr)
           .ConsumeValueOrDie();
 
-  EXPECT_EQ(
-      ::tensorflow::Status::OK(),
-      backend()
-          .compiler()
-          ->RunBackend(std::move(module), backend().default_stream_executor(),
-                       /*device_allocator=*/nullptr)
-          .status());
+  EXPECT_EQ(Status::OK(), backend()
+                              .compiler()
+                              ->RunBackend(std::move(module),
+                                           backend().default_stream_executor(),
+                                           /*device_allocator=*/nullptr)
+                              .status());
 }
 
 // A GTE inside of a fusion node inherits the layout of its operand (which
@@ -692,7 +691,7 @@ TEST_F(LayoutAssignmentTest, GTEInheritsLayoutFromOperand) {
     }
   )";
 
-  auto module = tools::Parse(module_str).ValueOrDie();
+  auto module = ParseHloString(module_str).ValueOrDie();
   ComputationLayout computation_layout(
       module->entry_computation()->ComputeProgramShape());
   Shape param_shape = ShapeUtil::MakeTupleShape(
@@ -794,6 +793,27 @@ TEST_F(LayoutAssignmentTest, ConditionalAsymmetricLayout) {
   EXPECT_TRUE(LayoutUtil::Equal(true_result->shape().layout(),
                                 false_result->shape().layout()));
   EXPECT_THAT(false_result->opcode(), HloOpcode::kCopy);
+}
+
+TEST_F(LayoutAssignmentTest, InternalErrorOnBitcast) {
+  auto builder = HloComputation::Builder(TestName());
+  auto constant0 = builder.AddInstruction(
+      HloInstruction::CreateConstant(Literal::CreateR2WithLayout<float>(
+          {{1.0, 2.0}, {3.0, 4.0}}, LayoutUtil::MakeLayout({0, 1}))));
+  builder.AddInstruction(HloInstruction::CreateUnary(
+      constant0->shape(), HloOpcode::kBitcast, constant0));
+  auto module = CreateNewModule();
+  module->AddEntryComputation(builder.Build());
+
+  ComputationLayout computation_layout(
+      module->entry_computation()->ComputeProgramShape());
+  LayoutAssignment layout_assignment(&computation_layout);
+  Status error_status = layout_assignment.Run(module.get()).status();
+  EXPECT_FALSE(error_status.ok());
+  EXPECT_THAT(
+      error_status.error_message(),
+      ::testing::HasSubstr(
+          "Unexpected bitcast operation seen during layout assignment"));
 }
 
 }  // namespace
